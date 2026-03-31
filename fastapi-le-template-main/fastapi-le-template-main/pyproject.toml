@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=64.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fastapi-le-starter"
+version = "0.0.1"
+description = "Starter repository for fastapi lab exam"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Kwasi Edwards", email = "kwasiedwards@gmail.com" }
+]
+dependencies = [
+    "asyncpg",
+    "fastapi[all]",
+    "httpx",
+    "itsdangerous",
+    "jinja2",
+    "pwdlib[argon2]",
+    "psycopg2-binary",
+    "pyjwt",
+    "python-jose",
+    "pytest-asyncio",
+    "pytest",
+    "ruff",
+    "sqlmodel",
+    "tabulate",
+    "typer",
+    "uvicorn[standard]",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.setuptools]
+packages = ["app"]
