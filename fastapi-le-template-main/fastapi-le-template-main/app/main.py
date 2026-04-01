@@ -9,7 +9,7 @@ from fastapi.templating import Jinja2Templates
 from app.utilities import get_flashed_messages
 from jinja2 import Environment, FileSystemLoader
 from sqlmodel import select
-from app.models import User
+from app.models import User, Album, Track, Comment, Reaction
 from app.utilities import flash, create_access_token
 from fastapi.staticfiles import StaticFiles
 
@@ -73,11 +73,94 @@ def login_action(
 
 
 @app.get('/app')
-def home_view(request: Request, user: AuthDep):
+def home_view(request: Request, user: AuthDep, db: SessionDep):
+  # View Albums - fetch all albums
+  albums = db.exec(select(Album)).all()
+  
+  # Get selected album and tracks from session
+  selected_album_id = request.session.get('selected_album_id')
+  selected_track_id = request.session.get('selected_track_id')
+  tracks = []
+  comments = []
+  
+  if selected_album_id:
+    tracks = db.exec(select(Track).where(Track.album_id == selected_album_id)).all()
+  
+  if selected_track_id:
+    comments = db.exec(select(Comment).where(Comment.track_id == selected_track_id)).all()
+  
   return templates.TemplateResponse(
           request=request, 
           name="index.html",
+          context={
+            "albums": albums,
+            "selected_album_id": selected_album_id,
+            "tracks": tracks,
+            "selected_track_id": selected_track_id,
+            "comments": comments,
+          }
       )
+
+@app.post('/albums/{album_id}/select')
+def select_album(album_id: int, request: Request, user: AuthDep):
+  # View Album Tracks - select an album
+  request.session['selected_album_id'] = album_id
+  request.session['selected_track_id'] = None  # Reset track selection
+  return RedirectResponse(url=request.url_for('home_view'), status_code=status.HTTP_303_SEE_OTHER)
+
+@app.post('/tracks/{track_id}/select')
+def select_track(track_id: int, request: Request, user: AuthDep):
+  # View Track Comments - select a track
+  request.session['selected_track_id'] = track_id
+  return RedirectResponse(url=request.url_for('home_view'), status_code=status.HTTP_303_SEE_OTHER)
+
+@app.post('/comments')
+def add_comment(
+  request: Request,
+  user: AuthDep,
+  db: SessionDep,
+  track_id: int = Form(),
+  text: str = Form(),
+):
+  # Comment on Track - add a comment
+  comment = Comment(track_id=track_id, user_id=user.id, text=text)
+  db.add(comment)
+  db.commit()
+  db.refresh(comment)
+  request.session['selected_track_id'] = track_id
+  return RedirectResponse(url=request.url_for('home_view'), status_code=status.HTTP_303_SEE_OTHER)
+
+@app.post('/reactions')
+def add_reaction(
+  request: Request,
+  user: AuthDep,
+  db: SessionDep,
+  track_id: int = Form(),
+  reaction_type: str = Form(),
+):
+  # React to Track - add like/dislike
+  reaction = Reaction(track_id=track_id, user_id=user.id, reaction_type=reaction_type)
+  db.add(reaction)
+  db.commit()
+  db.refresh(reaction)
+  request.session['selected_track_id'] = track_id
+  return RedirectResponse(url=request.url_for('home_view'), status_code=status.HTTP_303_SEE_OTHER)
+
+@app.post('/comments/{comment_id}/delete')
+def delete_comment(
+  comment_id: int,
+  request: Request,
+  user: AuthDep,
+  db: SessionDep,
+):
+  # Delete Comment - delete a comment user made
+  comment = db.exec(select(Comment).where(Comment.id == comment_id)).one_or_none()
+  if comment and comment.user_id == user.id:
+    track_id = comment.track_id
+    db.delete(comment)
+    db.commit()
+    request.session['selected_track_id'] = track_id
+  return RedirectResponse(url=request.url_for('home_view'), status_code=status.HTTP_303_SEE_OTHER)
 
 @app.get('/logout')
 async def logout(request: Request):
